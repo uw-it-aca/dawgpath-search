@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dawgpath-search"
+version = "0.1.0"
+description = "Shared offline search index builder for DawgPath and its data pipeline"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = ["Whoosh==2.7.4"]
+
+[project.scripts]
+dawgpath-search = "dawgpath_search.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["dawgpath_search*"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

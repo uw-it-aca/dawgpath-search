@@ -1,0 +1,1 @@
+"""Standalone search contract tests."""
