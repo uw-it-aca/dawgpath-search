@@ -229,13 +229,18 @@ def _valid_file_info(info: object) -> bool:
 
 
 def _read_metadata(index_dir: Path, release_id: str) -> dict:
-    if not isinstance(release_id, str) or not release_id.strip():
-        raise IndexValidationError("A nonempty release_id is required")
     try:
         content = (index_dir / METADATA_FILE).read_bytes()
     except OSError as exc:
         raise IndexValidationError(f"Cannot read {METADATA_FILE}: {exc}") from exc
     metadata = _json_input(content, METADATA_FILE)
+    _validate_metadata(metadata, release_id)
+    return metadata
+
+
+def _validate_metadata(metadata: object, release_id: str) -> None:
+    if not isinstance(release_id, str) or not release_id.strip():
+        raise IndexValidationError("A nonempty release_id is required")
     if not isinstance(metadata, dict):
         raise IndexValidationError("Index metadata must be an object")
     expected = {
@@ -265,13 +270,9 @@ def _read_metadata(index_dir: Path, release_id: str) -> dict:
         or not all(_valid_file_info(info) for info in inputs.values())
     ):
         raise IndexValidationError("Invalid index input metadata")
-    return metadata
 
 
-def open_index(index_dir: str | Path, *, release_id: str) -> FileIndex:
-    """Verify trusted index files and compatibility before opening with Whoosh."""
-    index_dir = Path(index_dir)
-    metadata = _read_metadata(index_dir, release_id)
+def _index_files(metadata: dict) -> dict:
     files = metadata.get("files")
     if not isinstance(files, dict) or not files:
         raise IndexValidationError("Index file checksums are missing")
@@ -292,6 +293,15 @@ def open_index(index_dir: str | Path, *, release_id: str) -> FileIndex:
             raise IndexValidationError("Invalid index filename")
         if not _valid_file_info(info):
             raise IndexValidationError(f"Invalid index file metadata: {name}")
+    return files
+
+
+def open_index(index_dir: str | Path, *, release_id: str) -> FileIndex:
+    """Verify trusted index files and compatibility before opening with Whoosh."""
+    index_dir = Path(index_dir)
+    metadata = _read_metadata(index_dir, release_id)
+    files = _index_files(metadata)
+    for name, info in files.items():
         path = index_dir / name
         if path.is_symlink() or not path.is_file():
             raise IndexValidationError(f"Index file missing or not regular: {name}")
