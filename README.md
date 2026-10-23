@@ -5,8 +5,8 @@ offline Pathways development. No database, GCS client, credentials, or network
 access is needed at build time.
 
 Requires Python 3.12+ and pins Whoosh 2.7.4, matching the existing Pathways
-schema/analyzers. This is the initial package; integration into the pipeline
-and Pathways is a separate step after this repository is published.
+schema/analyzers. The pipeline and Pathways share index building, bundle
+creation, and verified offline preparation through this package.
 
 ## Development
 
@@ -94,7 +94,7 @@ directory is created; an indexing failure may leave a partial directory.
 `index-metadata.json` is written last and records source hashes, release ID,
 builder/Whoosh versions, contract version, counts, and index-file checksums.
 Discard failed output and retry with a fresh directory. The caller handles
-bundling, storage, release finalization, and activation; this package does not
+storage, full release manifests, finalization, and activation; this package does not
 overwrite an active index.
 
 `open_index` verifies metadata, the exact index file set, file hashes, schema,
@@ -110,6 +110,35 @@ Invalid input contents or index validation failures raise the public
 including missing source files and an existing output directory, raise their
 normal `OSError` subclasses. The CLI reports these failures on stderr and exits
 nonzero without emitting success metadata.
+
+## Create and prepare a bundle
+
+```python
+from dawgpath_search import create_bundle, prepare_bundle
+
+bundle = create_bundle("new-index", release_id="local-snapshot-v1")
+# Persist/publish bundle and metadata through the application's release manifest.
+prepare_bundle(
+    bundle, "prepared-index", metadata=metadata, release_id="local-snapshot-v1"
+)
+```
+
+`create_bundle` verifies an inactive index and returns gzip-compressed tar bytes,
+with sorted root-level files and fixed archive timestamps. The index must not
+change while bundling. Repeated bundling of identical files is deterministic;
+independent Whoosh builds need not produce identical bytes. The format remains
+compatible with the pipeline's original `search-index.tar.gz` releases.
+
+`prepare_bundle` takes trusted expected index metadata, compares the bundled
+metadata exactly, rejects unknown/duplicate/non-regular/path-traversing members,
+and checks sizes and hashes before opening Whoosh. It verifies compatibility,
+schema, and document counts in a sibling staging directory before moving to a
+fresh output directory. Failure removes staging; existing outputs, including
+symlinks, are never replaced. Metadata is limited to 1 MiB.
+
+The caller must authenticate the release origin and check the bundle's outer
+checksum, full application manifest, and source-data consistency first.
+Neither API downloads files, imports data, or activates an index.
 
 ## Compatibility
 
