@@ -1,0 +1,91 @@
+name: tests
+
+on:
+  push:
+    branches: [main, master, qa, develop]
+  pull_request:
+    branches: [main, master, qa, develop]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . ruff build twine
+
+      - name: Check release version
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          tag = os.environ["RELEASE_TAG"]
+          if tag not in (version, f"v{version}"):
+              raise SystemExit(f"Release tag {tag!r} does not match package version {version!r}")
+          PY
+
+      - name: Run linters
+        run: |
+          ruff check .
+          ruff format --check dawgpath_search tests
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build and check distributions
+        run: |
+          python -m build
+          python -m twine check --strict dist/*
+
+      - name: Smoke test installed wheel outside checkout
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$RUNNER_TEMP"
+          python -c 'from dawgpath_search import build_index, open_index, IndexValidationError'
+          dawgpath-search --help
+
+      - name: Upload tested distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: github.event_name == 'release' && vars.PYPI_PUBLISH_ENABLED == 'true'
+    needs: test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Download tested distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

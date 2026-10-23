@@ -23,6 +23,33 @@ including stored documents, query ranking, stemming, campus/type/flag filters,
 and integer COI ranges. They also cover input validation, offline operation,
 partial builds, metadata/file tampering, and the module CLI.
 
+## CI and releases
+
+The GitHub Actions workflow runs on pull requests and pushes to `main`, `master`,
+`qa`, and `develop`, and on published GitHub releases. It tests with Python 3.12,
+runs Ruff lint/format checks, builds a wheel and source distribution, validates
+their metadata, and smoke-tests the installed wheel outside the checkout.
+Tested distributions are retained as workflow artifacts for seven days.
+
+This follows the organization's `actions/examples/python-test-publish` pattern,
+but uses `python -m build` for this `pyproject.toml` package instead of the
+`setup.py`-based `uw-it-aca/actions/publish-pypi` action. The package version is
+maintained in `pyproject.toml`; release tags must match it, with an optional `v`
+prefix (for example, `v0.1.0`).
+
+PyPI publishing is disabled by default. When ready:
+
+1. Grant this repository access to the `PYPI_API_TOKEN` Actions secret, with
+   permission to publish the `dawgpath-search` project on PyPI.
+2. Set the Actions repository variable `PYPI_PUBLISH_ENABLED` to `true`.
+3. Update the package version and publish a matching GitHub release.
+
+The publish job runs only for a published release after all checks pass, and
+uploads the exact distributions built by the test job. Neither a normal push
+nor a tag push publishes to PyPI. Enabling the variable does not retroactively
+publish earlier releases. Until publishing is enabled, applications should
+continue to pin an exact Git commit.
+
 ## Build an index
 
 Supply one release's local files:
